@@ -60,6 +60,8 @@ async def admin_shifts_menu(callback: CallbackQuery):
         keyboard = [
             [InlineKeyboardButton(text="➕ Добавить смену", callback_data="admin_add_shift")],
             [InlineKeyboardButton(text="📝 Редактировать смену", callback_data="admin_edit_shift_list")],
+            [InlineKeyboardButton(text="👥 Участники смены", callback_data="admin_shift_participants_list")],
+            [InlineKeyboardButton(text="✅ Информация о выполненной работе", callback_data="admin_shift_completed_list")],
             [InlineKeyboardButton(text="🗄️ Архивировать смену", callback_data="admin_archive_shift_list")]
         ]
         
@@ -219,14 +221,18 @@ async def admin_edit_shift(callback: CallbackQuery, state: FSMContext):
         keyboard = [
             [InlineKeyboardButton(text="📅 Изменить дату", callback_data=f"edit_date_{shift_id}")],
             [InlineKeyboardButton(text="📝 Изменить описание", callback_data=f"edit_desc_{shift_id}")],
+            [InlineKeyboardButton(text="👥 Участники смены", callback_data=f"admin_participants_{shift_id}")],
+            [InlineKeyboardButton(text="✅ Информация о выполненной работе", callback_data=f"admin_completed_{shift_id}")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data="admin_edit_shift_list")]
         ]
         
+        completed_status = "✅ Добавлена" if shift.completed_info else "❌ Не добавлена"
         await callback.message.edit_text(
             f"📝 Редактирование смены\n\n"
             f"ID: {shift.id}\n"
             f"Дата: {date_str}\n"
-            f"Описание: {shift.description or 'Отсутствует'}\n\n"
+            f"Описание: {shift.description or 'Отсутствует'}\n"
+            f"Информация о работе: {completed_status}\n\n"
             f"Что вы хотите изменить?",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
         )
@@ -317,6 +323,201 @@ async def admin_archive_shift(callback: CallbackQuery):
             await callback.answer("❌ Смена не найдена!", show_alert=True)
 
 
+# ==================== УЧАСТНИКИ СМЕНЫ ====================
+
+@router.callback_query(F.data == "admin_shift_participants_list")
+async def admin_shift_participants_list(callback: CallbackQuery):
+    """Список смен для просмотра участников"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    async with get_session() as db:
+        # Получаем все смены (включая прошедшие) для просмотра участников
+        from sqlalchemy import select
+        from database.models import Shift
+        query = select(Shift).where(Shift.is_active == True).order_by(Shift.date.desc())
+        result = await db.execute(query)
+        shifts = list(result.scalars().all())
+        
+        if not shifts:
+            await callback.answer("❌ Нет активных смен!", show_alert=True)
+            return
+        
+        keyboard = []
+        for shift in shifts[:15]:  # Показываем последние 15 смен
+            date_str = shift.date.strftime("%d.%m.%Y %H:%M")
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📅 {date_str}",
+                    callback_data=f"admin_participants_{shift.id}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_shifts")])
+        
+        await callback.message.edit_text(
+            "👥 Выберите смену для просмотра участников:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+
+
+@router.callback_query(F.data.startswith("admin_participants_"))
+async def admin_shift_participants(callback: CallbackQuery):
+    """Просмотр участников смены"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    shift_id = int(callback.data.replace("admin_participants_", ""))
+    
+    async with get_session() as db:
+        from database.crud import get_shift_by_id, get_shift_participants
+        shift = await get_shift_by_id(db, shift_id)
+        
+        if not shift:
+            await callback.answer("❌ Смена не найдена!", show_alert=True)
+            return
+        
+        participants = await get_shift_participants(db, shift_id)
+        date_str = shift.date.strftime("%d.%m.%Y %H:%M")
+        
+        text = f"👥 Участники смены\n\n"
+        text += f"📅 Дата: {date_str}\n"
+        text += f"📝 Описание: {shift.description or 'Отсутствует'}\n\n"
+        
+        if not participants:
+            text += "❌ На эту смену нет записанных участников."
+        else:
+            text += f"Всего участников: {len(participants)}\n\n"
+            for i, user in enumerate(participants, 1):
+                stars = "⭐" * user.rating
+                text += f"{i}. {user.full_name}\n"
+                text += f"   📞 Телефон: {user.phone}\n"
+                text += f"   ID: {user.telegram_id} | Рейтинг: {stars}\n"
+                text += f"   Курс: {user.course} | Опыт: {user.experience_shifts} смен\n\n"
+        
+        keyboard = [
+            [InlineKeyboardButton(text="◀️ Назад к списку", callback_data="admin_shift_participants_list")]
+        ]
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+
+
+# ==================== ИНФОРМАЦИЯ О ВЫПОЛНЕННОЙ РАБОТЕ ====================
+
+@router.callback_query(F.data == "admin_shift_completed_list")
+async def admin_shift_completed_list(callback: CallbackQuery):
+    """Список смен для добавления информации о выполненной работе"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    async with get_session() as db:
+        # Получаем все смены (включая прошедшие)
+        from sqlalchemy import select
+        from database.models import Shift
+        query = select(Shift).where(Shift.is_active == True).order_by(Shift.date.desc())
+        result = await db.execute(query)
+        shifts = list(result.scalars().all())
+        
+        if not shifts:
+            await callback.answer("❌ Нет активных смен!", show_alert=True)
+            return
+        
+        keyboard = []
+        for shift in shifts[:15]:  # Показываем последние 15 смен
+            date_str = shift.date.strftime("%d.%m.%Y %H:%M")
+            has_info = "✅" if shift.completed_info else "❌"
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"{has_info} {date_str}",
+                    callback_data=f"admin_completed_{shift.id}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_shifts")])
+        
+        await callback.message.edit_text(
+            "✅ Информация о выполненной работе\n\n"
+            "Выберите смену для добавления/просмотра информации:\n"
+            "(✅ - информация добавлена, ❌ - не добавлена)",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+
+
+@router.callback_query(F.data.startswith("admin_completed_"))
+async def admin_shift_completed(callback: CallbackQuery, state: FSMContext):
+    """Просмотр/редактирование информации о выполненной работе"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    shift_id = int(callback.data.replace("admin_completed_", ""))
+    
+    async with get_session() as db:
+        from database.crud import get_shift_by_id, get_shift_participants
+        shift = await get_shift_by_id(db, shift_id)
+        
+        if not shift:
+            await callback.answer("❌ Смена не найдена!", show_alert=True)
+            return
+        
+        participants = await get_shift_participants(db, shift_id)
+        date_str = shift.date.strftime("%d.%m.%Y %H:%M")
+        
+        text = f"✅ Информация о выполненной работе\n\n"
+        text += f"📅 Дата: {date_str}\n"
+        
+        if participants:
+            text += f"👥 Участники ({len(participants)}):\n"
+            for user in participants:
+                text += f"• {user.full_name} ({user.phone})\n"
+            text += "\n"
+        
+        if shift.completed_info:
+            text += f"📝 Текущая информация:\n{shift.completed_info}\n\n"
+            text += "Введите новую информацию о выполненной работе\n(или отправьте '-' чтобы удалить):"
+        else:
+            text += "❌ Информация о выполненной работе не добавлена.\n\n"
+            text += "Введите информацию о выполненной работе:\n"
+            text += "(что было сделано, какие задачи выполнены и т.д.)"
+        
+        await callback.message.edit_text(text)
+        await state.set_state(AdminStates.waiting_completed_info)
+        await state.update_data(shift_id=shift_id)
+
+
+@router.message(AdminStates.waiting_completed_info)
+async def admin_shift_completed_info_save(message: Message, state: FSMContext):
+    """Сохранение информации о выполненной работе"""
+    if not is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        await state.clear()
+        return
+    
+    data = await state.get_data()
+    shift_id = data["shift_id"]
+    
+    completed_info = None if message.text == "-" else message.text
+    
+    async with get_session() as db:
+        shift = await update_shift(db, shift_id, completed_info=completed_info)
+        
+        if shift:
+            if completed_info:
+                await message.answer("✅ Информация о выполненной работе успешно сохранена!")
+            else:
+                await message.answer("✅ Информация о выполненной работе удалена!")
+        else:
+            await message.answer("❌ Смена не найдена!")
+    
+    await state.clear()
+
+
 # ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ====================
 
 @router.callback_query(F.data == "admin_users")
@@ -369,6 +570,7 @@ async def admin_users_list(callback: CallbackQuery):
         for i, user in enumerate(users[:20], 1):
             stars = "⭐" * user.rating
             text += f"{i}. {user.full_name}\n"
+            text += f"   📞 Телефон: {user.phone}\n"
             text += f"   ID: {user.telegram_id} | Рейтинг: {stars} ({user.rating}/5)\n"
             text += f"   Курс: {user.course} | Смен: {user.experience_shifts}\n\n"
         

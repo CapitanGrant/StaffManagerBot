@@ -72,6 +72,19 @@ async def get_shift_by_id(db: AsyncSession, shift_id: int) -> Optional[Shift]:
     return result.scalar_one_or_none()
 
 
+async def get_shift_participants(db: AsyncSession, shift_id: int) -> List[User]:
+    """Получение списка участников смены (не отмененные записи)"""
+    result = await db.execute(
+        select(User)
+        .join(ShiftAssignment)
+        .where(
+            ShiftAssignment.shift_id == shift_id,
+            ShiftAssignment.is_cancelled == False
+        )
+    )
+    return list(result.scalars().all())
+
+
 async def get_active_shifts(db: AsyncSession, from_date: Optional[datetime] = None) -> List[Shift]:
     """Получение активных смен"""
     query = select(Shift).where(Shift.is_active == True)

@@ -34,6 +34,7 @@ class Shift(Base):
     id = Column(Integer, primary_key=True, index=True)
     date = Column(DateTime, nullable=False, index=True)
     description = Column(Text, nullable=True)
+    completed_info = Column(Text, nullable=True)  # Информация о выполненной работе на смене
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

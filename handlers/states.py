@@ -25,4 +25,5 @@ class AdminStates(StatesGroup):
     waiting_rating = State()
     waiting_broadcast_message = State()
     waiting_setting_value = State()
+    waiting_completed_info = State()
 
