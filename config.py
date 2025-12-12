@@ -31,5 +31,26 @@ class Config:
     @staticmethod
     def is_admin(user_id: int) -> bool:
         """Проверка, является ли пользователь администратором"""
-        return user_id in Config.ADMIN_CHAT_IDS
+        # Проверяем в .env
+        if user_id in Config.ADMIN_CHAT_IDS:
+            return True
+        
+        # Проверяем в БД (если доступна)
+        try:
+            from database.database import get_session
+            from database.crud import get_setting
+            import asyncio
+            
+            # Создаем новый event loop если нужно
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Проверяем синхронно (для простоты используем sync подход)
+            # В реальных условиях лучше проверять через async функцию
+            return False  # Будет проверяться в handlers через get_setting
+        except:
+            return False
 

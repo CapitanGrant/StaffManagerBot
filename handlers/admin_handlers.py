@@ -17,15 +17,36 @@ from handlers.user_handlers import get_main_menu_keyboard
 router = Router()
 
 
-def is_admin(user_id: int) -> bool:
-    """Проверка прав администратора"""
-    return Config.is_admin(user_id) or user_id in Config.ADMIN_CHAT_IDS
+def is_admin_sync(user_id: int) -> bool:
+    """Синхронная проверка прав администратора (только .env)"""
+    return user_id in Config.ADMIN_CHAT_IDS
+
+
+async def is_admin(user_id: int) -> bool:
+    """Асинхронная проверка прав администратора (проверяет .env и БД)"""
+    # Проверяем в Config (из .env)
+    if user_id in Config.ADMIN_CHAT_IDS:
+        return True
+    
+    # Проверяем в БД
+    try:
+        from database.crud import get_setting
+        async with get_session() as db:
+            admin_ids_str = await get_setting(db, "admin_chat_ids")
+            if admin_ids_str:
+                admin_ids_db = [int(x.strip()) for x in admin_ids_str.split(",")]
+                if user_id in admin_ids_db:
+                    return True
+    except:
+        pass
+    
+    return False
 
 
 @router.message(Command("admin"))
 async def admin_menu(message: Message):
     """Главное меню администратора"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         return
     
@@ -47,7 +68,7 @@ async def admin_menu(message: Message):
 @router.callback_query(F.data == "admin_shifts")
 async def admin_shifts_menu(callback: CallbackQuery):
     """Меню управления сменами"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -82,7 +103,7 @@ async def admin_shifts_menu(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_add_shift")
 async def admin_add_shift_start(callback: CallbackQuery, state: FSMContext):
     """Начало добавления смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -98,7 +119,7 @@ async def admin_add_shift_start(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_shift_date)
 async def admin_add_shift_date(message: Message, state: FSMContext):
     """Обработка даты смены"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -138,7 +159,7 @@ async def admin_add_shift_date(message: Message, state: FSMContext):
 @router.message(AdminStates.waiting_shift_description)
 async def admin_add_shift_description(message: Message, state: FSMContext):
     """Завершение добавления или редактирования смены"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -171,7 +192,7 @@ async def admin_add_shift_description(message: Message, state: FSMContext):
 @router.callback_query(F.data == "admin_edit_shift_list")
 async def admin_edit_shift_list(callback: CallbackQuery, state: FSMContext):
     """Список смен для редактирования"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -203,7 +224,7 @@ async def admin_edit_shift_list(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("admin_edit_shift_"))
 async def admin_edit_shift(callback: CallbackQuery, state: FSMContext):
     """Редактирование смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -241,7 +262,7 @@ async def admin_edit_shift(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("edit_date_"))
 async def admin_edit_shift_date_start(callback: CallbackQuery, state: FSMContext):
     """Начало редактирования даты смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -259,7 +280,7 @@ async def admin_edit_shift_date_start(callback: CallbackQuery, state: FSMContext
 @router.callback_query(F.data.startswith("edit_desc_"))
 async def admin_edit_shift_desc_start(callback: CallbackQuery, state: FSMContext):
     """Начало редактирования описания смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -275,7 +296,7 @@ async def admin_edit_shift_desc_start(callback: CallbackQuery, state: FSMContext
 @router.callback_query(F.data == "admin_archive_shift_list")
 async def admin_archive_shift_list(callback: CallbackQuery):
     """Список смен для архивирования"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -307,7 +328,7 @@ async def admin_archive_shift_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("admin_archive_shift_"))
 async def admin_archive_shift(callback: CallbackQuery):
     """Архивирование смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -328,7 +349,7 @@ async def admin_archive_shift(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_shift_participants_list")
 async def admin_shift_participants_list(callback: CallbackQuery):
     """Список смен для просмотра участников"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -365,7 +386,7 @@ async def admin_shift_participants_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("admin_participants_"))
 async def admin_shift_participants(callback: CallbackQuery):
     """Просмотр участников смены"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -412,7 +433,7 @@ async def admin_shift_participants(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_shift_completed_list")
 async def admin_shift_completed_list(callback: CallbackQuery):
     """Список смен для добавления информации о выполненной работе"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -452,7 +473,7 @@ async def admin_shift_completed_list(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("admin_completed_"))
 async def admin_shift_completed(callback: CallbackQuery, state: FSMContext):
     """Просмотр/редактирование информации о выполненной работе"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -494,7 +515,7 @@ async def admin_shift_completed(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_completed_info)
 async def admin_shift_completed_info_save(message: Message, state: FSMContext):
     """Сохранение информации о выполненной работе"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -523,7 +544,7 @@ async def admin_shift_completed_info_save(message: Message, state: FSMContext):
 @router.callback_query(F.data == "admin_users")
 async def admin_users_menu(callback: CallbackQuery):
     """Меню управления пользователями"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -534,7 +555,9 @@ async def admin_users_menu(callback: CallbackQuery):
         
         keyboard = [
             [InlineKeyboardButton(text="📋 Список пользователей", callback_data="admin_users_list")],
-            [InlineKeyboardButton(text="⭐ Изменить рейтинг", callback_data="admin_change_rating")]
+            [InlineKeyboardButton(text="⭐ Изменить рейтинг", callback_data="admin_change_rating")],
+            [InlineKeyboardButton(text="📞 Изменить телефон", callback_data="admin_change_phone")],
+            [InlineKeyboardButton(text="🛠️ Изменить навыки", callback_data="admin_change_skills")]
         ]
         
         keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_back")])
@@ -548,7 +571,7 @@ async def admin_users_menu(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_users_list")
 async def admin_users_list(callback: CallbackQuery):
     """Список всех пользователей"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -588,7 +611,7 @@ async def admin_users_list(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_change_rating")
 async def admin_change_rating_start(callback: CallbackQuery, state: FSMContext):
     """Начало изменения рейтинга"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -601,8 +624,8 @@ async def admin_change_rating_start(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdminStates.waiting_user_telegram_id)
 async def admin_change_rating_user(message: Message, state: FSMContext):
-    """Обработка Telegram ID для изменения рейтинга"""
-    if not is_admin(message.from_user.id):
+    """Обработка Telegram ID для изменения данных пользователя"""
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -620,19 +643,37 @@ async def admin_change_rating_user(message: Message, state: FSMContext):
             await message.answer(f"❌ Пользователь с ID {telegram_id} не найден. Попробуйте снова:")
             return
         
+        data = await state.get_data()
+        action = data.get("action", "change_rating")
         await state.update_data(telegram_id=telegram_id)
-        await message.answer(
-            f"👤 Пользователь: {user.full_name}\n"
-            f"Текущий рейтинг: {user.rating}/5\n\n"
-            f"Введите новый рейтинг (от 1 до 5):"
-        )
-        await state.set_state(AdminStates.waiting_rating)
+        
+        if action == "change_phone":
+            await message.answer(
+                f"👤 Пользователь: {user.full_name}\n"
+                f"Текущий телефон: {user.phone}\n\n"
+                f"Введите новый телефон:"
+            )
+            await state.set_state(AdminStates.waiting_user_phone)
+        elif action == "change_skills":
+            await message.answer(
+                f"👤 Пользователь: {user.full_name}\n"
+                f"Текущие навыки: {user.skills or 'Не указаны'}\n\n"
+                f"Введите новые навыки:"
+            )
+            await state.set_state(AdminStates.waiting_user_skills)
+        else:  # change_rating
+            await message.answer(
+                f"👤 Пользователь: {user.full_name}\n"
+                f"Текущий рейтинг: {user.rating}/5\n\n"
+                f"Введите новый рейтинг (от 1 до 5):"
+            )
+            await state.set_state(AdminStates.waiting_rating)
 
 
 @router.message(AdminStates.waiting_rating)
 async def admin_change_rating_value(message: Message, state: FSMContext):
     """Завершение изменения рейтинга"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -663,12 +704,214 @@ async def admin_change_rating_value(message: Message, state: FSMContext):
     await state.clear()
 
 
-# ==================== НАСТРОЙКИ СИСТЕМЫ ====================
+@router.message(AdminStates.waiting_user_phone)
+async def admin_change_phone_value(message: Message, state: FSMContext):
+    """Завершение изменения телефона"""
+    if not await is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        await state.clear()
+        return
+    
+    from handlers.validators import validate_phone
+    
+    phone = message.text.strip()
+    if not validate_phone(phone):
+        await message.answer("❌ Некорректный формат телефона. Попробуйте снова:")
+        return
+    
+    data = await state.get_data()
+    telegram_id = data["telegram_id"]
+    
+    async with get_session() as db:
+        user = await update_user(db, telegram_id, phone=phone)
+        
+        if user:
+            await message.answer(
+                f"✅ Телефон пользователя {user.full_name} успешно изменён!\n"
+                f"Новый телефон: {phone}"
+            )
+        else:
+            await message.answer("❌ Не удалось обновить телефон.")
+    
+    await state.clear()
+
+
+@router.message(AdminStates.waiting_user_skills)
+async def admin_change_skills_value(message: Message, state: FSMContext):
+    """Завершение изменения навыков"""
+    if not await is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        await state.clear()
+        return
+    
+    skills = message.text.strip()
+    if len(skills) < 1:
+        await message.answer("❌ Навыки не могут быть пустыми. Попробуйте снова:")
+        return
+    
+    data = await state.get_data()
+    telegram_id = data["telegram_id"]
+    
+    async with get_session() as db:
+        user = await update_user(db, telegram_id, skills=skills)
+        
+        if user:
+            await message.answer(
+                f"✅ Навыки пользователя {user.full_name} успешно изменены!\n"
+                f"Новые навыки: {skills}"
+            )
+        else:
+            await message.answer("❌ Не удалось обновить навыки.")
+    
+    await state.clear()
+
+
+# ==================== УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ ====================
+
+@router.callback_query(F.data == "admin_manage_admins")
+async def admin_manage_admins_menu(callback: CallbackQuery):
+    """Меню управления администраторами"""
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    async with get_session() as db:
+        # Получаем админов из .env и БД
+        admin_ids_env = Config.ADMIN_CHAT_IDS
+        admin_ids_db_str = await get_setting(db, "admin_chat_ids")
+        admin_ids_db = [int(x.strip()) for x in admin_ids_db_str.split(",")] if admin_ids_db_str else []
+        
+        # Объединяем и убираем дубликаты
+        all_admin_ids = list(set(admin_ids_env + admin_ids_db))
+        
+        text = "👤 Управление администраторами\n\n"
+        text += f"Всего администраторов: {len(all_admin_ids)}\n\n"
+        
+        for admin_id in all_admin_ids:
+            text += f"• {admin_id}\n"
+        
+        text += "\nВыберите действие:"
+        
+        keyboard = [
+            [InlineKeyboardButton(text="➕ Добавить администратора", callback_data="admin_add_admin")],
+            [InlineKeyboardButton(text="➖ Удалить администратора", callback_data="admin_remove_admin")]
+        ]
+        keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_settings")])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+
+
+@router.callback_query(F.data == "admin_add_admin")
+async def admin_add_admin_start(callback: CallbackQuery, state: FSMContext):
+    """Начало добавления администратора"""
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        "➕ Добавление администратора\n\n"
+        "Введите Telegram ID нового администратора:"
+    )
+    await state.set_state(AdminStates.waiting_new_admin_id)
+    await state.update_data(action="add")
+
+
+@router.callback_query(F.data == "admin_remove_admin")
+async def admin_remove_admin_start(callback: CallbackQuery, state: FSMContext):
+    """Начало удаления администратора"""
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
+        return
+    
+    async with get_session() as db:
+        admin_ids_env = Config.ADMIN_CHAT_IDS
+        admin_ids_db_str = await get_setting(db, "admin_chat_ids")
+        admin_ids_db = [int(x.strip()) for x in admin_ids_db_str.split(",")] if admin_ids_db_str else []
+        all_admin_ids = list(set(admin_ids_env + admin_ids_db))
+        
+        if len(all_admin_ids) <= 1:
+            await callback.answer("❌ Нельзя удалить последнего администратора!", show_alert=True)
+            return
+        
+        await callback.message.edit_text(
+            "➖ Удаление администратора\n\n"
+            "Введите Telegram ID администратора для удаления:"
+        )
+        await state.set_state(AdminStates.waiting_new_admin_id)
+        await state.update_data(action="remove")
+
+
+@router.message(AdminStates.waiting_new_admin_id)
+async def admin_add_remove_admin_value(message: Message, state: FSMContext):
+    """Обработка добавления/удаления администратора"""
+    if not await is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        await state.clear()
+        return
+    
+    try:
+        new_admin_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите корректный Telegram ID (число). Попробуйте снова:")
+        return
+    
+    data = await state.get_data()
+    action = data.get("action", "add")
+    
+    async with get_session() as db:
+        # Получаем текущий список админов из БД
+        admin_ids_db_str = await get_setting(db, "admin_chat_ids")
+        admin_ids_db = [int(x.strip()) for x in admin_ids_db_str.split(",")] if admin_ids_db_str else []
+        
+        if action == "add":
+            # Проверяем, не является ли уже админом
+            if new_admin_id in admin_ids_db or new_admin_id in Config.ADMIN_CHAT_IDS:
+                await message.answer(f"❌ Пользователь {new_admin_id} уже является администратором!")
+                await state.clear()
+                return
+            
+            # Добавляем админа
+            admin_ids_db.append(new_admin_id)
+            admin_ids_str = ",".join(map(str, admin_ids_db))
+            await set_setting(db, "admin_chat_ids", admin_ids_str)
+            
+            await message.answer(
+                f"✅ Администратор {new_admin_id} успешно добавлен!\n\n"
+                f"⚠️ Для применения изменений необходимо перезапустить бота или обновить Config.ADMIN_CHAT_IDS в .env"
+            )
+        else:  # remove
+            # Нельзя удалить себя
+            if new_admin_id == message.from_user.id:
+                await message.answer("❌ Вы не можете удалить сами себя!")
+                await state.clear()
+                return
+            
+            # Проверяем, существует ли админ
+            if new_admin_id not in admin_ids_db and new_admin_id not in Config.ADMIN_CHAT_IDS:
+                await message.answer(f"❌ Пользователь {new_admin_id} не является администратором!")
+                await state.clear()
+                return
+            
+            # Удаляем админа из списка в БД (если там был)
+            if new_admin_id in admin_ids_db:
+                admin_ids_db.remove(new_admin_id)
+                admin_ids_str = ",".join(map(str, admin_ids_db)) if admin_ids_db else ""
+                await set_setting(db, "admin_chat_ids", admin_ids_str)
+            
+            await message.answer(
+                f"✅ Администратор {new_admin_id} удалён из списка в БД!\n\n"
+                f"⚠️ Если он указан в .env файле, удалите его вручную из ADMIN_CHAT_IDS"
+            )
+    
+    await state.clear()
 
 @router.callback_query(F.data == "admin_settings")
 async def admin_settings_menu(callback: CallbackQuery):
     """Меню настроек системы"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -689,7 +932,12 @@ async def admin_settings_menu(callback: CallbackQuery):
             "Выберите параметр для изменения:"
         )
         
+        # Получаем список админов из БД
+        admin_ids_db = await get_setting(db, "admin_chat_ids")
+        admin_list_db = admin_ids_db.split(",") if admin_ids_db else []
+        
         keyboard = [
+            [InlineKeyboardButton(text="👤 Управление администраторами", callback_data="admin_manage_admins")],
             [InlineKeyboardButton(text="💬 Work Group ID", callback_data="admin_set_work_group")],
             [InlineKeyboardButton(text="📢 Notification Channel ID", callback_data="admin_set_channel")]
         ]
@@ -704,7 +952,7 @@ async def admin_settings_menu(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_set_work_group")
 async def admin_set_work_group_start(callback: CallbackQuery, state: FSMContext):
     """Начало установки Work Group ID"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -719,7 +967,7 @@ async def admin_set_work_group_start(callback: CallbackQuery, state: FSMContext)
 @router.callback_query(F.data == "admin_set_channel")
 async def admin_set_channel_start(callback: CallbackQuery, state: FSMContext):
     """Начало установки Notification Channel ID"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -734,7 +982,7 @@ async def admin_set_channel_start(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_setting_value)
 async def admin_set_setting_value(message: Message, state: FSMContext):
     """Обработка значения настройки"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -761,7 +1009,7 @@ async def admin_set_setting_value(message: Message, state: FSMContext):
 @router.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast_start(callback: CallbackQuery, state: FSMContext):
     """Начало рассылки"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     
@@ -795,7 +1043,7 @@ async def admin_broadcast_start(callback: CallbackQuery, state: FSMContext):
 @router.message(AdminStates.waiting_broadcast_message)
 async def admin_broadcast_send(message: Message, state: FSMContext):
     """Отправка рассылки"""
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора.")
         await state.clear()
         return
@@ -874,7 +1122,7 @@ async def admin_broadcast_send(message: Message, state: FSMContext):
 @router.callback_query(F.data == "admin_back")
 async def admin_back(callback: CallbackQuery):
     """Возврат в главное меню администратора"""
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора.", show_alert=True)
         return
     

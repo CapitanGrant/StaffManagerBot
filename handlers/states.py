@@ -26,4 +26,7 @@ class AdminStates(StatesGroup):
     waiting_broadcast_message = State()
     waiting_setting_value = State()
     waiting_completed_info = State()
+    waiting_new_admin_id = State()
+    waiting_user_phone = State()
+    waiting_user_skills = State()
 
