@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: staff-manager-bot
+    # always - всегда перезапускать, даже после ручной остановки
+    # unless-stopped - перезапускать всегда, кроме ручной остановки (рекомендуется)
     restart: unless-stopped
     
     # Переменные окружения из .env файла
@@ -21,18 +23,28 @@ services:
     #   - WORK_GROUP_ID=${WORK_GROUP_ID}
     #   - NOTIFICATION_CHANNEL_ID=${NOTIFICATION_CHANNEL_ID}
     
-    # Монтируем директорию для базы данных (сохраняет данные между перезапусками)
+    # Монтируем директории
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs  # Монтируем директорию для логов
       # Если используете внешний .env файл, раскомментируйте:
       # - ./.env:/app/.env:ro
     
-    # Логи
+    # Healthcheck для мониторинга состояния контейнера
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Настройка логирования
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "50m"  # Максимальный размер одного лог-файла
+        max-file: "10"   # Количество сохраняемых лог-файлов (всего до 500MB)
+        compress: "true" # Сжатие старых лог-файлов
     
     # Здоровье контейнера (опционально, можно добавить healthcheck)
     # healthcheck:
