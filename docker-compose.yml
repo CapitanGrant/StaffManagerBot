@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  staff-manager-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: staff-manager-bot
+    restart: unless-stopped
+    
+    # Переменные окружения из .env файла
+    # Убедитесь, что файл .env существует в той же директории, что и docker-compose.yml
+    env_file:
+      - .env
+    
+    # Альтернативно, можно указать переменные напрямую (раскомментируйте и используйте вместо env_file):
+    # environment:
+    #   - BOT_TOKEN=${BOT_TOKEN}
+    #   - DATABASE_URL=${DATABASE_URL}
+    #   - ADMIN_CHAT_IDS=${ADMIN_CHAT_IDS}
+    #   - WORK_GROUP_ID=${WORK_GROUP_ID}
+    #   - NOTIFICATION_CHANNEL_ID=${NOTIFICATION_CHANNEL_ID}
+    
+    # Монтируем директорию для базы данных (сохраняет данные между перезапусками)
+    volumes:
+      - ./data:/app/data
+      # Если используете внешний .env файл, раскомментируйте:
+      # - ./.env:/app/.env:ro
+    
+    # Логи
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Здоровье контейнера (опционально, можно добавить healthcheck)
+    # healthcheck:
+    #   test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
