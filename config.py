@@ -2,8 +2,7 @@ import os
 from dotenv import load_dotenv
 from typing import List
 
-# Загружаем .env файл, если он существует (для локального запуска)
-# В Docker переменные уже доступны через os.getenv()
+
 load_dotenv()
 
 class Config:

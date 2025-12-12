@@ -90,9 +90,9 @@ sudo chmod +x /usr/local/bin/docker-compose
 ### 2. Создайте директорию для проекта:
 
 ```bash
-sudo mkdir -p /opt/staff-manager-bot
-sudo chown $USER:$USER /opt/staff-manager-bot
-cd /opt/staff-manager-bot
+sudo mkdir -p /home/deploy/staff-bot
+sudo chown $USER:$USER /home/deploy/staff-bot
+cd /home/deploy/staff-bot
 ```
 
 ### 3. Создайте файл `.env`:
