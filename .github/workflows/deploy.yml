@@ -1,0 +1,93 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main  # Измените на вашу основную ветку (main или master)
+    paths:
+      # Игнорируем изменения только в README и документации
+      - '!README.md'
+      - '!*.md'
+      - '!.gitignore'
+      - '.github/**'
+
+env:
+  DOCKER_IMAGE_NAME: staff-manager-bot
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to server
+        run: |
+          # Создаем временную директорию
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p /tmp/staff-bot-deploy"
+          
+          # Копируем файлы проекта (исключая .env и данные)
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude '.git' \
+            --exclude 'data' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.venv' \
+            --exclude 'venv' \
+            ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_DEPLOY_PATH }}/
+
+      - name: Build and deploy on server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd ${{ secrets.SERVER_DEPLOY_PATH }}
+            
+            # Останавливаем старый контейнер
+            docker-compose down || true
+            
+            # Собираем новый образ
+            docker-compose build --no-cache
+            
+            # Запускаем контейнер
+            docker-compose up -d
+            
+            # Очищаем старые образы (опционально)
+            docker image prune -f || true
+            
+            # Показываем логи последних 50 строк
+            echo "=== Deployment completed ==="
+            docker-compose logs --tail=50
+          EOF
+
+      - name: Health check
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd ${{ secrets.SERVER_DEPLOY_PATH }}
+            sleep 5
+            if docker-compose ps | grep -q "Up"; then
+              echo "✅ Deployment successful! Container is running."
+            else
+              echo "❌ Deployment failed! Container is not running."
+              docker-compose logs
+              exit 1
+            fi
+          EOF
+
+      - name: Notification (optional)
+        if: always()
+        run: |
+          echo "Deployment status: ${{ job.status }}"
+          # Здесь можно добавить отправку уведомлений в Telegram, Slack и т.д.
+
