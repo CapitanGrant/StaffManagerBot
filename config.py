@@ -2,15 +2,18 @@ import os
 from dotenv import load_dotenv
 from typing import List
 
+# Загружаем .env файл, если он существует (для локального запуска)
+# В Docker переменные уже доступны через os.getenv()
 load_dotenv()
 
 class Config:
     """Конфигурация бота"""
     
     # Токен бота
-    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
+    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "").strip()
     
     # URL базы данных
+    # Для Docker используйте абсолютный путь в .env: sqlite+aiosqlite:////app/data/staff_bot.db
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./staff_bot.db")
     
     # ID администраторов (можно несколько через запятую)

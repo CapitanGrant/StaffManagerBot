@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -22,7 +23,12 @@ async def main():
     
     # Проверка конфигурации
     if not Config.BOT_TOKEN:
-        logger.error("BOT_TOKEN не установлен! Проверьте файл .env")
+        logger.error("BOT_TOKEN не установлен!")
+        logger.error("Проверьте:")
+        logger.error("1. Файл .env существует и содержит BOT_TOKEN")
+        logger.error("2. В docker-compose.yml указан env_file: - .env")
+        logger.error("3. Или переменные переданы через environment")
+        logger.error(f"Текущие переменные окружения: BOT_TOKEN={'установлен' if os.getenv('BOT_TOKEN') else 'НЕ установлен'}")
         return
     
     # Инициализация бота и диспетчера
