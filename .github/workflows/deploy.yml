@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - main  # Измените на вашу основную ветку (main или master)
-    paths:
-      # Игнорируем изменения только в README и документации
-      - '!README.md'
-      - '!*.md'
-      - '!.gitignore'
-      - '.github/**'
+    paths-ignore:
+      # Игнорируем изменения только в документации
+      - '*.md'
+      - '!.github/workflows/**'
+      - '.gitignore'
+      - 'DEPLOYMENT.md'
+      - 'DOCKER.md'
+      - 'TROUBLESHOOTING.md'
+      - 'README.md'
+  workflow_dispatch:  # Позволяет запускать вручную
 
 env:
   DOCKER_IMAGE_NAME: staff-manager-bot
