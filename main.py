@@ -10,7 +10,7 @@ from database.database import init_db
 from handlers import user_handlers, admin_handlers
 from scheduler.weekly_update import schedule_weekly_updates
 
-# Настройка логирования
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
