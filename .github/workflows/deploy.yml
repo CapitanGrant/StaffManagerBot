@@ -58,6 +58,11 @@ jobs:
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
             cd ${{ secrets.SERVER_DEPLOY_PATH }}
             
+            # BACKUP:
+            BACKUP_DIR="/home/deploy/staff-bot/backups"
+            mkdir -p $BACKUP_DIR
+            cp /home/deploy/staff-bot/data/staff_bot.db $BACKUP_DIR/staff_bot.db.backup_$(date +%Y%m%d_%H%M%S)
+            
             # Останавливаем старый контейнер
             docker-compose down || true
             
